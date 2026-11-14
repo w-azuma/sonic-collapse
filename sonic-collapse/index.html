@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SONIC COLLAPSE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800&family=Noto+Sans+JP:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#03040a; --panel:rgba(8,10,24,.78); --line:rgba(120,140,255,.18);
+    --text:#dfe6ff; --dim:#7d86b0; --cyan:#4cc9f0; --purple:#9d4edd; --red:#ff2e63;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+    font-family:"Noto Sans JP",system-ui,sans-serif;font-size:13px}
+  canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .mono{font-family:"JetBrains Mono",monospace}
+  .ui{transition:opacity .4s}
+  body.hide-ui .ui{opacity:0;pointer-events:none}
+
+  /* ---------- title / phase ---------- */
+  #title{position:fixed;left:24px;top:20px;pointer-events:none}
+  #title h1{font-family:Orbitron,sans-serif;font-weight:800;font-size:22px;letter-spacing:.35em}
+  #title .sub{color:var(--dim);font-size:11px;letter-spacing:.2em;margin-top:4px}
+  #phase{position:fixed;left:24px;top:76px;pointer-events:none}
+  #phase .label{font-family:Orbitron,sans-serif;font-size:11px;color:var(--dim);letter-spacing:.3em}
+  #phase .name{font-family:Orbitron,sans-serif;font-size:34px;font-weight:800;letter-spacing:.18em;
+    transition:color .6s, text-shadow .6s}
+  #phase .jp{font-size:12px;color:var(--dim);letter-spacing:.2em}
+
+  /* ---------- meters ---------- */
+  #meters{position:fixed;left:24px;bottom:84px;width:230px;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;padding:12px 14px;backdrop-filter:blur(8px)}
+  .meter{display:grid;grid-template-columns:42px 1fr 38px;align-items:center;gap:8px;margin:5px 0}
+  .meter span{font-size:10px;color:var(--dim);letter-spacing:.1em}
+  .meter .bar{height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
+  .meter .bar i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--cyan),var(--purple))}
+  .meter b{font-weight:400;font-size:10px;text-align:right;color:var(--dim)}
+  #beatRow{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:10px;color:var(--dim)}
+  #beatDot{width:10px;height:10px;border-radius:50%;background:#222;transition:background .05s}
+  #fps{margin-left:auto}
+
+  /* ---------- transport ---------- */
+  #transport{position:fixed;left:24px;right:24px;bottom:20px;height:48px;display:flex;align-items:center;gap:14px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:0 16px;backdrop-filter:blur(8px)}
+  button{font:inherit;color:var(--text);background:rgba(255,255,255,.05);border:1px solid var(--line);
+    border-radius:8px;padding:6px 12px;cursor:pointer;transition:background .2s,border-color .2s}
+  button:hover{background:rgba(76,201,240,.12);border-color:rgba(76,201,240,.5)}
+  button.on{background:rgba(157,78,221,.28);border-color:var(--purple)}
+  #playBtn{width:36px;height:32px;padding:0;font-size:14px}
+  #seek{flex:1}
+  #timeLabel{min-width:96px;text-align:right;color:var(--dim);font-size:11px}
+  #trackName{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim);font-size:11px}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:4px;background:rgba(255,255,255,.12);border-radius:2px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--cyan);cursor:pointer;box-shadow:0 0 8px var(--cyan)}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border:none;border-radius:50%;background:var(--cyan);cursor:pointer}
+  #vol{width:80px}
+
+  /* ---------- side panel ---------- */
+  #panel{position:fixed;right:24px;top:20px;bottom:84px;width:280px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;overflow-y:auto;backdrop-filter:blur(8px)}
+  #panel.collapsed{width:auto;bottom:auto}
+  #panel.collapsed .body{display:none}
+  #panel header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  #panel header h2{font-family:Orbitron,sans-serif;font-size:11px;letter-spacing:.3em;color:var(--dim)}
+  #panel h3{font-size:10px;letter-spacing:.25em;color:var(--dim);margin:16px 0 8px;font-family:Orbitron,sans-serif;font-weight:500}
+  .row{display:grid;grid-template-columns:78px 1fr 34px;align-items:center;gap:8px;margin:7px 0}
+  .row label{font-size:12px}
+  .row output{font-size:10px;color:var(--dim);text-align:right}
+  .btns{display:flex;flex-wrap:wrap;gap:6px}
+  .btns button{flex:1;padding:6px 4px;font-size:12px}
+  select,textarea{font:inherit;color:var(--text);background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:6px;padding:4px 6px;width:100%}
+  select option{background:#0b0d1f}
+  .maprow{display:grid;grid-template-columns:90px 1fr;align-items:center;gap:8px;margin:6px 0}
+  textarea{height:64px;resize:vertical;font-size:10px;font-family:"JetBrains Mono",monospace;margin-top:6px}
+  .note{font-size:11px;color:var(--dim);line-height:1.6;margin-top:6px}
+  .pipeline{font-size:10px;line-height:1.9;color:var(--dim)}
+  .pipeline b{color:var(--cyan);font-weight:600}
+  #toast{position:fixed;left:50%;top:22px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);
+    padding:8px 16px;border-radius:8px;opacity:0;transition:opacity .3s;pointer-events:none;font-size:12px}
+  #toast.show{opacity:1}
+
+  /* ---------- start overlay ---------- */
+  #start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at center,rgba(20,10,50,.55),rgba(0,0,0,.92));z-index:10}
+  #start.hidden{display:none}
+  .card{width:min(520px,90vw);text-align:center;padding:40px 36px;border:1px solid var(--line);border-radius:16px;background:rgba(6,8,20,.82)}
+  .card h1{font-family:Orbitron,sans-serif;font-weight:800;font-size:34px;letter-spacing:.3em;
+    background:linear-gradient(90deg,var(--cyan),var(--purple),var(--red));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .card .concept{margin:14px 0 28px;color:var(--dim);letter-spacing:.12em;font-size:13px}
+  .card .choices{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .card .choices button{padding:12px 20px;font-size:14px;border-radius:10px}
+  .card .primary{background:linear-gradient(90deg,rgba(76,201,240,.25),rgba(157,78,221,.3));border-color:rgba(157,78,221,.7)}
+  .card .drop{margin-top:18px;padding:14px;border:1px dashed var(--line);border-radius:10px;color:var(--dim);font-size:12px}
+  .card .drop.over{border-color:var(--cyan);color:var(--text)}
+  .card .err{color:var(--red);margin-top:14px;font-size:12px;min-height:16px}
+  .card .keys{margin-top:20px;font-size:11px;color:var(--dim);line-height:1.8}
+  kbd{font-family:"JetBrains Mono",monospace;font-size:10px;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  #hint{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:8px 16px;font-size:12px;color:var(--dim);white-space:nowrap;transition:opacity .8s;pointer-events:none}
+  #hint b{color:var(--text);font-weight:700}
+  #hint.faded{opacity:.25}
+  #rebuild{position:fixed;left:50%;top:34%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity .6s}
+  #rebuild.show{opacity:1}
+  #rebuild .msg{font-family:Orbitron,"Noto Sans JP",sans-serif;font-size:14px;letter-spacing:.25em;margin-bottom:10px;text-shadow:0 0 12px rgba(0,0,0,.8)}
+  #rebuild .gauge{width:260px;height:6px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden;margin:0 auto}
+  #rebuild .gauge i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),#06d6a0)}
+  #cursorRing{position:fixed;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;pointer-events:none;opacity:0;
+    transition:opacity .2s;-webkit-mask:radial-gradient(circle,transparent 26px,#000 27px);mask:radial-gradient(circle,transparent 26px,#000 27px)}
+  #cursorLabel{position:fixed;pointer-events:none;font-size:11px;letter-spacing:.15em;opacity:0;transform:translate(-50%,40px);transition:opacity .2s;white-space:nowrap}
+  #flash{position:fixed;inset:0;pointer-events:none;background:#fff;opacity:0}
+  canvas#gl{cursor:crosshair}
+  @media (max-width:760px){ #panel{display:none} #meters{display:none} }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="title" class="ui">
+  <h1>SONIC COLLAPSE</h1>
+  <div class="sub">音は、世界を創り、壊し、再構築する。</div>
+</div>
+<div id="phase" class="ui">
+  <div class="label">PHASE</div>
+  <div class="name" id="phaseName">SILENCE</div>
+  <div class="jp" id="phaseJp">静寂</div>
+</div>
+
+<div id="meters" class="ui mono">
+  <div class="meter"><span>LOW</span><div class="bar"><i id="mLow"></i></div><b id="vLow">0.00</b></div>
+  <div class="meter"><span>MID</span><div class="bar"><i id="mMid"></i></div><b id="vMid">0.00</b></div>
+  <div class="meter"><span>HIGH</span><div class="bar"><i id="mHigh"></i></div><b id="vHigh">0.00</b></div>
+  <div class="meter"><span>RMS</span><div class="bar"><i id="mRms"></i></div><b id="vRms">0.00</b></div>
+  <div id="beatRow"><div id="beatDot"></div><span>BEAT</span><span id="bpmLabel">— BPM</span><span id="fps">— fps</span></div>
+</div>
+
+<aside id="panel" class="ui">
+  <header><h2>CONTROL</h2><button id="collapseBtn" title="パネルを畳む">–</button></header>
+  <div class="body">
+    <h3>PHASE</h3>
+    <div class="btns" style="margin-bottom:6px">
+      <button id="autoBtn" class="on">自動</button><button id="manualBtn">手動</button>
+    </div>
+    <div class="btns" id="phaseBtns">
+      <button data-p="SILENCE">静寂</button><button data-p="BUILD">構築</button>
+      <button data-p="COLLAPSE">崩壊</button><button data-p="REBIRTH">再生</button>
+    </div>
+
+    <h3>VISUAL</h3>
+    <div class="row"><label>感度</label><input type="range" id="sSens" min="0.5" max="2" step="0.05" value="1"><output id="oSens">1.00</output></div>
+    <div class="row"><label>変形強度</label><input type="range" id="sDeform" min="0" max="2" step="0.05" value="1"><output id="oDeform">1.00</output></div>
+    <div class="row"><label>粒子数</label><input type="range" id="sPart" min="0.1" max="1" step="0.05" value="0.8"><output id="oPart">80%</output></div>
+    <div class="row"><label>発光</label><input type="range" id="sBloom" min="0" max="3" step="0.05" value="1.2"><output id="oBloom">1.20</output></div>
+    <div class="maprow"><label>テーマ</label>
+      <select id="theme"><option value="neon">NEON（青紫赤）</option><option value="aurora">AURORA（緑青）</option><option value="mono">MONO（白黒＋シアン）</option></select></div>
+
+    <h3>MAPPING 音 → 映像</h3>
+    <div class="maprow"><label>球体の変形</label><select data-map="deform"></select></div>
+    <div class="maprow"><label>粒子の拡散</label><select data-map="spread"></select></div>
+    <div class="maprow"><label>発光の強さ</label><select data-map="glow"></select></div>
+    <div class="maprow"><label>色相のゆれ</label><select data-map="hue"></select></div>
+
+    <h3>PRESET</h3>
+    <div class="maprow"><label>スロット</label><select id="slot"><option>1</option><option>2</option><option>3</option></select></div>
+    <div class="btns"><button id="saveBtn">保存</button><button id="loadBtn">呼び出し</button><button id="copyBtn">JSONコピー</button></div>
+    <textarea id="jsonIn" placeholder="プリセットJSONを貼り付けて「適用」"></textarea>
+    <div class="btns" style="margin-top:6px"><button id="applyBtn">JSONを適用</button></div>
+
+    <h3>PLAY</h3>
+    <p class="note" style="margin-top:0"><b style="color:var(--text)">クリック</b>：叩く（高さで音程が変わる）<br><b style="color:var(--text)">長押し→離す</b>：エネルギーをためて崩壊<br><b style="color:var(--text)">再生フェーズで円を描く</b>：世界を再構築<br><kbd>Q</kbd>〜<kbd>I</kbd> メロディ（Aマイナーペンタ）　<kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd><kbd>V</kbd> キック/スネア/ハット/クラッシュ<br>鳴らした音もそのまま解析され、映像とフェーズに反映されます。</p>
+
+    <h3>HOW IT WORKS</h3>
+    <div class="pipeline mono">
+      <b>01</b> 音源 → Web Audio API<br>
+      <b>02</b> AnalyserNode / FFT 2048点<br>
+      <b>03</b> LOW 20–250Hz / MID 250–2k / HIGH 2k–12k<br>
+      <b>04</b> RMS（音量）・低域のスペクトル変化でビート候補<br>
+      <b>05</b> 自動ゲイン調整 → 平滑化<br>
+      <b>06</b> 音量レベル＋ビート密度でフェーズ判定<br>
+      <b>07</b> GLSLシェーダーで球体・粒子・残像・発光へ
+    </div>
+    <p class="note"><kbd>Space</kbd> 再生/停止　<kbd>H</kbd> UIを隠す（録画用）<br><kbd>1</kbd>〜<kbd>4</kbd> フェーズを手動で切替　<kbd>F</kbd> 全画面</p>
+  </div>
+</aside>
+
+<div id="transport" class="ui">
+  <button id="playBtn" title="再生/停止">▶</button>
+  <span id="trackName">—</span>
+  <input type="range" id="seek" min="0" max="1000" value="0">
+  <span id="timeLabel" class="mono">0:00 / 0:00</span>
+  <span style="color:var(--dim);font-size:11px">VOL</span><input type="range" id="vol" min="0" max="1" step="0.01" value="0.8">
+  <button id="newBtn">音源を変える</button>
+</div>
+
+<div id="toast"></div>
+<div id="flash"></div>
+<div id="hint" class="ui"><b>クリック</b> 叩く　<b>長押し→離す</b> 世界を壊す　<b>Q〜I</b> メロディ　<b>Z X C V</b> ドラム</div>
+<div id="rebuild"><div class="msg">円を描いて、世界を再構築する</div><div class="gauge"><i id="rebuildBar"></i></div></div>
+<div id="cursorRing"></div><div id="cursorLabel"></div>
+
+<div id="start">
+  <div class="card">
+    <h1>SONIC COLLAPSE</h1>
+    <p class="concept">音は、世界を創り、壊し、再構築する。</p>
+    <div class="choices">
+      <button class="primary" id="demoBtn">デモ曲で体験する</button>
+      <button id="fileBtn">音源ファイルを選ぶ</button>
+      <button id="freeBtn">音源なしで遊ぶ</button>
+    </div>
+    <input type="file" id="fileIn" accept=".wav,.mp3,.m4a,.ogg,.flac,audio/*" hidden>
+    <div class="drop" id="drop">ここに音源ファイルをドロップ（WAV推奨・MP3/M4A/OGGも可、100MBまで）</div>
+    <div class="err" id="err"></div>
+    <div class="keys"><b style="color:var(--text)">クリックで叩く／長押しして離すと世界が崩壊／円を描くと再構築</b><br>キーボードの Q〜I でメロディ、Z X C V でドラムを鳴らせます。<br><br>デモ曲はこのページの中でプログラムから合成した約64秒のオリジナル曲です<br>（静寂 → 構築 → 崩壊 → 再生 → 崩壊 の展開）。</div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RGBShiftShader } from 'three/addons/shaders/RGBShiftShader.js';
+
+const $ = id => document.getElementById(id);
+
+/* =========================================================
+   SETTINGS / THEMES
+   ========================================================= */
+const PHASES = {
+  SILENCE:  { jp:'静寂', collapse:0.0,  rebirth:0, damp:0.86, rot:0.04, size:0.8 },
+  BUILD:    { jp:'構築', collapse:0.12, rebirth:0, damp:0.72, rot:0.14, size:1.0 },
+  COLLAPSE: { jp:'崩壊', collapse:1.0,  rebirth:0, damp:0.80, rot:0.38, size:1.25 },
+  REBIRTH:  { jp:'再生', collapse:0.08, rebirth:1, damp:0.93, rot:0.09, size:1.0 },
+};
+const THEMES = {
+  neon:   { SILENCE:['#1b2a6b','#4cc9f0'], BUILD:['#3a0ca3','#4cc9f0'], COLLAPSE:['#ff006e','#ff7b00'], REBIRTH:['#7209b7','#06d6a0'] },
+  aurora: { SILENCE:['#0b3d3a','#48cae4'], BUILD:['#0077b6','#52b788'], COLLAPSE:['#00f5d4','#f15bb5'], REBIRTH:['#2d6a4f','#90e0ef'] },
+  mono:   { SILENCE:['#222831','#9aa5b1'], BUILD:['#3d4451','#e0e6ed'], COLLAPSE:['#ffffff','#4cc9f0'], REBIRTH:['#5c677d','#ffffff'] },
+};
+const SOURCES = { low:'LOW（低域）', mid:'MID（中域）', high:'HIGH（高域）', rms:'RMS（音量）', beat:'BEAT（拍）', none:'なし' };
+const DEFAULTS = { sens:1, deform:1, particles:0.8, bloom:1.2, theme:'neon', map:{ deform:'low', spread:'beat', glow:'rms', hue:'high' } };
+let settings = structuredClone(DEFAULTS);
+let autoPhase = true;
+
+/* =========================================================
+   AUDIO ENGINE
+   ========================================================= */
+const A = { ctx:null, buffer:null, src:null, gain:null, analyser:null, startAt:0, offset:0, playing:false, name:'' };
+let freqData, timeData;
+
+function ensureCtx(){
+  if (A.ctx) return;
+  A.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  A.gain = A.ctx.createGain(); A.gain.gain.value = +$('vol').value;
+  A.analyser = A.ctx.createAnalyser();
+  A.analyser.fftSize = 2048;
+  A.analyser.smoothingTimeConstant = 0.55;
+  A.gain.connect(A.ctx.destination);           // 聴く経路（音量の影響を受ける）
+  A.synth = A.ctx.createGain(); A.synth.gain.value = 0.85;   // 自分で鳴らす音
+  A.synth.connect(A.analyser); A.synth.connect(A.gain);
+  A.noise = A.ctx.createBuffer(1, A.ctx.sampleRate, A.ctx.sampleRate);
+  { const d = A.noise.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1; }
+  freqData = new Uint8Array(A.analyser.frequencyBinCount);
+  timeData = new Float32Array(A.analyser.fftSize);
+}
+const curTime = () => A.playing ? A.ctx.currentTime - A.startAt : A.offset;
+
+function play(){
+  if (!A.buffer || A.playing) return;
+  if (A.ctx.state === 'suspended') A.ctx.resume();
+  if (A.offset >= A.buffer.duration - 0.05) A.offset = 0;
+  const src = A.ctx.createBufferSource();
+  src.buffer = A.buffer;
+  src.connect(A.analyser);   // 解析経路（音量スライダーの影響を受けない）
+  src.connect(A.gain);
+  src.start(0, A.offset);
+  A.startAt = A.ctx.currentTime - A.offset;
+  A.src = src; A.playing = true;
+  src.onended = () => {
+    if (A.src !== src) return;
+    A.playing = false; A.src = null;
+    A.offset = A.buffer.duration;
+    $('playBtn').textContent = '▶';
+  };
+  $('playBtn').textContent = '❚❚';
+}
+function pause(){
+  if (!A.playing) return;
+  A.offset = curTime();
+  const s = A.src; A.src = null; A.playing = false;
+  try { s.stop(); } catch(e){}
+  $('playBtn').textContent = '▶';
+}
+function seek(t){
+  const was = A.playing;
+  if (was) pause();
+  A.offset = Math.max(0, Math.min(t, A.buffer.duration));
+  if (was) play();
+}
+
+
+/* ---------- live synth (what the player plays) ---------- */
+let synthUntil = 0;
+const isActive = () => A.playing || (A.ctx && A.ctx.currentTime < synthUntil);
+const SCALE = [57,60,62,64,67,69,72,74,76];                      // A minor pentatonic
+const mtof = m => 440*Math.pow(2,(m-69)/12);
+function out(pan=0){
+  ensureCtx(); if (A.ctx.state === 'suspended') A.ctx.resume();
+  synthUntil = A.ctx.currentTime + 3;
+  const p = A.ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); p.connect(A.synth); return p;
+}
+function env(g, t, a, peak, d){ g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t+a); g.gain.exponentialRampToValueAtTime(0.0001, t+a+d); }
+function noiseSrc(){ const n = A.ctx.createBufferSource(); n.buffer = A.noise; n.loop = true; return n; }
+function sKick(v=1, pan=0){
+  const o = out(pan), t = A.ctx.currentTime, osc = A.ctx.createOscillator(), g = A.ctx.createGain();
+  osc.frequency.setValueAtTime(160, t); osc.frequency.exponentialRampToValueAtTime(42, t+.13);
+  env(g, t, .003, .9*v, .45); osc.connect(g).connect(o); osc.start(t); osc.stop(t+.5);
+}
+function sSnare(v=1, pan=0){
+  const o = out(pan), t = A.ctx.currentTime, n = noiseSrc(), hp = A.ctx.createBiquadFilter(), g = A.ctx.createGain();
+  hp.type = 'highpass'; hp.frequency.value = 1200; env(g, t, .002, .5*v, .2);
+  n.connect(hp).connect(g).connect(o); n.start(t); n.stop(t+.25);
+  const osc = A.ctx.createOscillator(), g2 = A.ctx.createGain(); osc.type = 'triangle'; osc.frequency.value = 190;
+  env(g2, t, .002, .4*v, .1); osc.connect(g2).connect(o); osc.start(t); osc.stop(t+.15);
+}
+function sHat(v=1, pan=.3){
+  const o = out(pan), t = A.ctx.currentTime, n = noiseSrc(), hp = A.ctx.createBiquadFilter(), g = A.ctx.createGain();
+  hp.type = 'highpass'; hp.frequency.value = 7500; env(g, t, .001, .35*v, .06);
+  n.connect(hp).connect(g).connect(o); n.start(t); n.stop(t+.1);
+}
+function sCrash(v=1){
+  const o = out(0), t = A.ctx.currentTime, n = noiseSrc(), hp = A.ctx.createBiquadFilter(), g = A.ctx.createGain();
+  hp.type = 'highpass'; hp.frequency.value = 3500; env(g, t, .002, .4*v, 2.0);
+  n.connect(hp).connect(g).connect(o); n.start(t); n.stop(t+2.1);
+}
+function sNote(m, v=1, pan=0, dur=.9){
+  const o = out(pan), t = A.ctx.currentTime, lp = A.ctx.createBiquadFilter(), g = A.ctx.createGain();
+  lp.type = 'lowpass'; lp.Q.value = 6; lp.frequency.setValueAtTime(5000, t); lp.frequency.exponentialRampToValueAtTime(500, t+dur*.6);
+  env(g, t, .005, .22*v, dur); lp.connect(g).connect(o);
+  for (const det of [-9, 9]){ const osc = A.ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = mtof(m); osc.detune.value = det; osc.connect(lp); osc.start(t); osc.stop(t+dur+.05); }
+}
+function sImpact(m, pan){
+  const o = out(pan), t = A.ctx.currentTime, osc = A.ctx.createOscillator(), g = A.ctx.createGain();
+  osc.frequency.setValueAtTime(mtof(m-12)*2, t); osc.frequency.exponentialRampToValueAtTime(mtof(m-24), t+.25);
+  env(g, t, .002, .6, .5); osc.connect(g).connect(o); osc.start(t); osc.stop(t+.6);
+  sNote(m, .9, pan, .7); sHat(.6, pan);
+}
+let riser = null;
+function riserStart(){
+  if (riser) return;
+  const o = out(0), t = A.ctx.currentTime, n = noiseSrc(), bp = A.ctx.createBiquadFilter(), g = A.ctx.createGain();
+  bp.type = 'bandpass'; bp.Q.value = 3; bp.frequency.setValueAtTime(250, t); bp.frequency.exponentialRampToValueAtTime(7000, t+2);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(.45, t+2);
+  const osc = A.ctx.createOscillator(), g2 = A.ctx.createGain(); osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(55, t); osc.frequency.exponentialRampToValueAtTime(440, t+2);
+  g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(.12, t+2);
+  n.connect(bp).connect(g).connect(o); osc.connect(g2).connect(o); n.start(t); osc.start(t);
+  riser = { n, osc, g, g2 };
+}
+function riserStop(){
+  if (!riser) return;
+  const t = A.ctx.currentTime, r = riser; riser = null;
+  for (const g of [r.g, r.g2]){ g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(g.gain.value, .0001), t); g.gain.exponentialRampToValueAtTime(.0001, t+.08); }
+  r.n.stop(t+.1); r.osc.stop(t+.1);
+}
+function sDrop(power){
+  const o = out(0), t = A.ctx.currentTime, osc = A.ctx.createOscillator(), g = A.ctx.createGain();
+  osc.frequency.setValueAtTime(90, t); osc.frequency.exponentialRampToValueAtTime(28, t+1.4);
+  env(g, t, .005, .9, 1.6); osc.connect(g).connect(o); osc.start(t); osc.stop(t+1.7);
+  sKick(1.3); sCrash(1); sSnare(.8);
+  [45,57,60,64].forEach((m,i) => setTimeout(() => sNote(m, .7*power, (i%2?.4:-.4), 1.8), i*25));
+}
+function sRebuilt(){
+  [57,64,69,72,76].forEach((m,i) => setTimeout(() => sNote(m, .8, (i-2)*.3, 1.4), i*90));
+  setTimeout(() => sCrash(.5), 380);
+}
+
+/* ---------- demo track: synthesized in-page (original, ~64s) ---------- */
+function generateDemo(ctx){
+  const sr = ctx.sampleRate, bpm = 128, beat = 60/bpm, bar = beat*4, bars = 34;
+  const len = Math.floor(bars*bar*sr);
+  const L = new Float32Array(len), R = new Float32Array(len);
+  const midi = m => 440*Math.pow(2,(m-69)/12);
+  const chords = [[57,60,64],[53,57,60],[48,52,55],[55,59,62]];  // Am F C G
+  const roots  = [45,41,36,43];
+  const sec = b => b<4?'intro': b<12?'build': b<20?'drop': b<24?'break': b<32?'drop':'outro';
+  let seed = 7; const rnd = () => { seed = (seed*1664525 + 1013904223) >>> 0; return seed/2147483648 - 1; };
+  const add = (i,v,pan=0) => { if (i>=0 && i<len){ L[i] += v*(pan>0?1-pan:1); R[i] += v*(pan<0?1+pan:1); } };
+
+  const kick = (t,a) => { const i0=Math.floor(t*sr), n=Math.floor(.42*sr); let ph=0;
+    for (let k=0;k<n;k++){ const tt=k/sr, f=45+110*Math.exp(-tt*32); ph+=2*Math.PI*f/sr;
+      const click = k<sr*.004 ? rnd()*.25*(1-k/(sr*.004)) : 0;
+      add(i0+k, a*(Math.sin(ph)*Math.exp(-tt*6.5)+click)); } };
+  const snare = (t,a) => { const i0=Math.floor(t*sr), n=Math.floor(.25*sr);
+    for (let k=0;k<n;k++){ const tt=k/sr; add(i0+k, a*(rnd()*Math.exp(-tt*17)*.65 + Math.sin(2*Math.PI*185*tt)*Math.exp(-tt*30)*.5)); } };
+  const hat = (t,a,open,pan=.3) => { const i0=Math.floor(t*sr), n=Math.floor((open?.28:.06)*sr); let p=0;
+    for (let k=0;k<n;k++){ const tt=k/sr, x=rnd(), hp=x-p; p=x; add(i0+k, a*hp*Math.exp(-tt*(open?11:65))*.45, pan); } };
+  const bass = (t,d,m,a) => { const i0=Math.floor(t*sr), n=Math.floor(d*sr), f=midi(m); let ph=0, y=0;
+    for (let k=0;k<n;k++){ const tt=k/sr; ph=(ph+f/sr)%1; const saw=2*ph-1; y+=.12*(saw-y);
+      const env=Math.min(1,tt/.004)*Math.exp(-tt*4)*Math.min(1,(n-k)/(sr*.01)); add(i0+k, a*(y*.8+Math.sin(2*Math.PI*f*.5*tt)*.5)*env); } };
+  const lead = (t,d,m,a,pan) => { const i0=Math.floor(t*sr), n=Math.floor(d*sr), f=midi(m);
+    for (let k=0;k<n;k++){ const tt=k/sr, w=2*Math.PI*f*tt;
+      const env=Math.min(1,tt/.003)*Math.exp(-tt*9); add(i0+k, a*(Math.sin(w)+.3*Math.sin(2*w)+.12*Math.sin(3*w))*env, pan); } };
+  const crash = (t,a) => { const i0=Math.floor(t*sr), n=Math.floor(2.2*sr); let p=0;
+    for (let k=0;k<n;k++){ const tt=k/sr, x=rnd(), hp=x-p*.6; p=x; add(i0+k, a*hp*Math.exp(-tt*2.2)*.4, (k%2?.4:-.4)); } };
+
+  // --- pad (continuous, side-chained in drops)
+  const ph = new Float64Array(6); let amp = 0;
+  const padTarget = { intro:.4, build:.2, drop:.22, break:.55, outro:.3 };
+  for (let i=0;i<len;i++){
+    const t=i/sr, b=Math.floor(t/bar), s=sec(Math.min(b,bars-1)), ch=chords[b%4];
+    let target = padTarget[s];
+    if (s==='intro') target *= Math.min(1, t/6);
+    if (s==='outro') target *= Math.max(0, 1-(t-32*bar)/(2*bar));
+    amp += (target-amp)*.00004;
+    let pump = 1; if (s==='drop') pump = 1 - .65*Math.exp(-((t%beat))*9);
+    let v = 0;
+    for (let j=0;j<6;j++){ const f=midi(ch[j%3]+12)*(j<3?1.0015:.9985); ph[j]+=f/sr; v+=Math.sin(2*Math.PI*ph[j]); }
+    const pan = Math.sin(t*.4)*.3;
+    add(i, v/6*amp*pump*.5, pan);
+  }
+  // --- riser (bars 8–12)
+  { const t0=8*bar, t1=12*bar, i0=Math.floor(t0*sr), n=Math.floor((t1-t0)*sr); let y=0;
+    for (let k=0;k<n;k++){ const u=k/n, a=.03+.3*u*u, c=.02+.5*u*u; y+=c*(rnd()-y); add(i0+k, y*a*.5, Math.sin(u*40)*.5); } }
+
+  for (let b=0;b<bars;b++){
+    const s=sec(b), c=b%4, t0=b*bar;
+    if (b===12 || b===24) crash(t0,.9);
+    for (let q=0;q<4;q++){
+      const t=t0+q*beat;
+      if (s==='build'){
+        if (b>=6) kick(t, .26+.025*(b-6));
+        if (b>=4){ hat(t+beat/2, .12+.025*(b-4), false); }
+        if (b>=8) bass(t+beat/2, beat*.45, roots[c], .1);
+        if (b===10) snare(t+beat/2, .14);
+        if (b===11){ for (let r=0;r<4;r++) snare(t+r*beat/4, .1+.05*q); }
+      }
+      if (s==='drop'){
+        kick(t, .95);
+        if (q===1||q===3) snare(t, .55);
+        hat(t+beat/2, .45, true, .25);
+        for (let h=0;h<4;h++) if (h!==2) hat(t+h*beat/4, .22, false, -.3);
+        bass(t+beat/2, beat*.48, roots[c], .42);
+        bass(t+beat*.75, beat*.2, roots[c]+12, .18);
+        const arp=[0,1,2,1,2,0,1,2];
+        for (let r=0;r<4;r++){ const idx=(q*4+r)%8; lead(t+r*beat/4, beat/4, chords[c][arp[idx]]+12, .09, (r%2?.45:-.45)); }
+      }
+      if (s==='break' && b>=22) hat(t+beat/2, .12+.06*(b-22), false);
+      if (s==='outro' && b===32 && q<2) kick(t,.6);
+    }
+  }
+  // master: normalize + soft clip
+  let peak=0; for (let i=0;i<len;i++) peak=Math.max(peak,Math.abs(L[i]),Math.abs(R[i]));
+  const g=1/(peak||1), k=Math.tanh(1.3);
+  for (let i=0;i<len;i++){ L[i]=Math.tanh(L[i]*g*1.3)/k*.92; R[i]=Math.tanh(R[i]*g*1.3)/k*.92; }
+  const buf = ctx.createBuffer(2, len, sr); buf.copyToChannel(L,0); buf.copyToChannel(R,1);
+  return buf;
+}
+
+/* =========================================================
+   ANALYSIS: bands, RMS, beat, AGC, smoothing
+   ========================================================= */
+const F = { low:0, mid:0, high:0, rms:0, beat:0 };       // normalized + smoothed 0..1
+const peaks = { low:.3, mid:.3, high:.3, rms:.1 };
+let prevLowRaw = 0, fluxHist = [], lastBeatT = -1, beatTimes = [], rmsSlowPeak = .05, rmsSlow = 0, rmsVSlow = 0;
+let beatFlag = false;
+
+function bandAvg(lo, hi){
+  const binHz = A.ctx.sampleRate / A.analyser.fftSize;
+  const i0 = Math.max(1, Math.ceil(lo/binHz)), i1 = Math.min(freqData.length-1, Math.floor(hi/binHz));
+  let s = 0; for (let i=i0;i<=i1;i++) s += freqData[i];
+  return s / ((i1-i0+1)*255);
+}
+function agc(key, v, floor, dt){
+  peaks[key] = Math.max(v, peaks[key]*Math.exp(-dt*0.25), floor);   // 最大値をゆっくり下げる
+  return Math.min(1, v/peaks[key]);
+}
+const smooth = (cur, target, rate, dt) => cur + (target-cur)*(1-Math.exp(-dt*rate));
+
+function analyse(dt, now){
+  beatFlag = false;
+  if (!A.analyser || !isActive()){
+    for (const k of ['low','mid','high','rms']) F[k] = smooth(F[k], 0, 3, dt);
+    F.beat = smooth(F.beat, 0, 6, dt);
+    return;
+  }
+  A.analyser.getByteFrequencyData(freqData);
+  A.analyser.getFloatTimeDomainData(timeData);
+  const low = bandAvg(20,250), mid = bandAvg(250,2000), high = bandAvg(2000,12000);
+  let sq = 0; for (let i=0;i<timeData.length;i++) sq += timeData[i]*timeData[i];
+  const rms = Math.sqrt(sq/timeData.length);
+
+  // beat: positive spectral flux of low band vs adaptive threshold
+  const flux = Math.max(0, low - prevLowRaw); prevLowRaw = low;
+  fluxHist.push(flux); if (fluxHist.length > 50) fluxHist.shift();
+  const mean = fluxHist.reduce((a,b)=>a+b,0)/fluxHist.length;
+  const sd = Math.sqrt(fluxHist.reduce((a,b)=>a+(b-mean)**2,0)/fluxHist.length);
+  const kThr = 1.6 / settings.sens;
+  if (flux > mean + kThr*sd && flux > 0.015/settings.sens && low > 0.25 && now - lastBeatT > 0.26){
+    lastBeatT = now; beatFlag = true; beatTimes.push(now); F.beat = 1;
+  }
+  beatTimes = beatTimes.filter(t => now - t < 4);
+
+  const s = settings.sens;
+  F.low  = smooth(F.low,  Math.min(1, agc('low',  low,  .15, dt)**(1/s)), 14, dt);
+  F.mid  = smooth(F.mid,  Math.min(1, agc('mid',  mid,  .10, dt)**(1/s)), 12, dt);
+  F.high = smooth(F.high, Math.min(1, agc('high', high, .06, dt)**(1/s)), 16, dt);
+  F.rms  = smooth(F.rms,  Math.min(1, agc('rms',  rms,  .03, dt)**(1/s)), 10, dt);
+  F.beat *= Math.exp(-dt*5.5);
+
+  // slow level for phase decisions (relative to long-term peak)
+  rmsSlow = smooth(rmsSlow, rms, 2.2, dt);
+  rmsVSlow = smooth(rmsVSlow, rmsSlow, 0.3, dt);
+  rmsSlowPeak = Math.max(rmsSlow, rmsSlowPeak*Math.exp(-dt*0.02), .02);
+}
+
+function bpmEstimate(){
+  if (beatTimes.length < 4) return null;
+  const iv = []; for (let i=1;i<beatTimes.length;i++) iv.push(beatTimes[i]-beatTimes[i-1]);
+  iv.sort((a,b)=>a-b); const med = iv[Math.floor(iv.length/2)];
+  let bpm = 60/med; while (bpm < 80) bpm *= 2; while (bpm > 180) bpm /= 2;
+  return Math.round(bpm);
+}
+
+/* =========================================================
+   PHASE MANAGER
+   ========================================================= */
+let phase = 'SILENCE', phaseT = 0, forceUntil = 0, pointerReady = false;
+function setPhase(p){
+  if (p === phase) return;
+  phase = p; phaseT = 0;
+  if (p !== 'REBIRTH' && pointerReady){ P.rebuild = 0; P.lastAng = null; }
+  const [a,b] = THEMES[settings.theme][p];
+  $('phaseName').textContent = p; $('phaseJp').textContent = PHASES[p].jp;
+  $('phaseName').style.color = b; $('phaseName').style.textShadow = `0 0 24px ${a}`;
+  document.querySelectorAll('#phaseBtns button').forEach(x => x.classList.toggle('on', x.dataset.p === p && !autoPhase));
+}
+function updatePhase(dt, t){
+  phaseT += dt;
+  if (forceUntil){                                   // 長押しで起こした崩壊 → 終わったら再生へ
+    if (t < forceUntil) return;
+    forceUntil = 0; setPhase('REBIRTH'); return;
+  }
+  if (!autoPhase) return;
+  if (phase === 'REBIRTH' && !A.playing && phaseT < 12) return;   // 音源なしでも再構築する時間をとる
+  if (!isActive()){ if (phase !== 'SILENCE' && phaseT > 1) setPhase('SILENCE'); return; }
+  const level   = rmsSlow / rmsSlowPeak;                       // 曲全体の中での相対音量 0..1
+  const jump    = rmsVSlow > rmsSlowPeak*0.15 ? rmsSlow / rmsVSlow : 1;  // 直近数秒で音量が急に上がったか（ドロップ検出）
+  const density = beatTimes.length;                            // 直近4秒のビート数
+  let next;
+  if (phase === 'COLLAPSE'){
+    next = (level > 0.5 && density >= 4) ? 'COLLAPSE' : 'REBIRTH';
+  } else if (level > 0.6 && density >= 3 && jump > 1.5 && (phase === 'BUILD' || phase === 'REBIRTH') && phaseT > 3){
+    next = 'COLLAPSE';                                          // 急激な盛り上がり → 崩壊
+  } else if (phase === 'BUILD' && phaseT > 14 && level > 0.8 && density >= 6){
+    next = 'COLLAPSE';                                          // ドロップが無い曲でも長く盛り上がれば崩壊
+  } else if (phase === 'REBIRTH'){
+    next = (density >= 4 && phaseT > 3) ? 'BUILD' : (level < 0.08 ? 'SILENCE' : 'REBIRTH');
+  } else if (level < 0.2 || density < 2){
+    next = 'SILENCE';
+  } else {
+    next = 'BUILD';
+  }
+  const minHold = next === 'COLLAPSE' ? 0.3 : 1.6;               // 崩壊だけは即座に入る
+  if (next !== phase && phaseT > minHold) setPhase(next);
+}
+
+/* =========================================================
+   THREE.JS SCENE
+   ========================================================= */
+const canvas = $('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x03040a, 1);
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x03040a, 0.035);
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.2, 7);
+
+const NOISE = /* glsl */`
+vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1.0/6.0,1.0/3.0); const vec4 D=vec4(0.0,0.5,1.0,2.0);
+  vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.0-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
+  i=mod289(i);
+  vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+  float n_=0.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.0*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.0*x_);
+  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.0-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.0+1.0; vec4 s1=floor(b1)*2.0+1.0; vec4 sh=-step(h,vec4(0.0));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+  vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0); m=m*m;
+  return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
+
+/* ---------- core sphere ---------- */
+const coreUniforms = {
+  uTime:{value:0}, uDeform:{value:0}, uHigh:{value:0}, uCollapse:{value:0},
+  uColorA:{value:new THREE.Color('#1b2a6b')}, uColorB:{value:new THREE.Color('#4cc9f0')}, uWire:{value:0},
+  uHit:{value:new THREE.Vector3(0,0,1)}, uHitAmt:{value:0}, uHitAge:{value:9}, uCharge:{value:0}
+};
+const coreVS = NOISE + /* glsl */`
+uniform float uTime, uDeform, uHigh, uCollapse, uHitAmt, uHitAge, uCharge; uniform vec3 uHit;
+varying float vDisp; varying vec3 vNormal; varying vec3 vView; varying vec3 vPos;
+void main(){
+  vec3 p = position;
+  float n1 = snoise(p*1.4 + vec3(0.0, uTime*0.35, 0.0));
+  float n2 = snoise(p*5.0 + uTime*0.9);
+  float shard = pow(abs(snoise(p*2.6 + uTime*0.15)), 0.6);
+  float d = n1*uDeform*0.55 + n2*uHigh*0.12 + shard*uCollapse*0.9*(0.4+uDeform*0.6);
+  float hd = distance(normalize(p), uHit);                                   // 叩いた場所からの距離
+  d += uHitAmt*(sin(hd*16.0 - uHitAge*22.0)*0.22*exp(-hd*2.2) - 0.45*exp(-hd*hd*14.0));
+  d += uCharge*(snoise(p*9.0 + uTime*8.0)*0.12 - 0.18);                     // ためている間は縮んで震える
+  vDisp = d;
+  vec3 pos = p + normal*d;
+  vPos = pos;
+  vec4 mv = modelViewMatrix*vec4(pos,1.0);
+  vNormal = normalize(normalMatrix*normal); vView = normalize(-mv.xyz);
+  gl_Position = projectionMatrix*mv;
+}`;
+const coreFS = NOISE + /* glsl */`
+uniform vec3 uColorA, uColorB; uniform float uWire, uHigh, uCollapse, uTime, uCharge;
+varying float vDisp; varying vec3 vNormal; varying vec3 vView; varying vec3 vPos;
+vec3 pal(float t){ return 0.5 + 0.5*cos(6.28318*(t + vec3(0.0, 0.33, 0.67))); }   // 虹色（薄膜干渉っぽい色）
+void main(){
+  float ndv = max(dot(vNormal, vView), 0.0);
+  float fres = pow(1.0 - ndv, 2.4);
+  if (uWire > 0.5){ gl_FragColor = vec4(mix(uColorB, vec3(1.0), 0.3)*(0.07 + uCollapse*0.35), 1.0); return; }
+  vec3 q = vPos*1.7;
+  float n = snoise(q + vec3(0.0, uTime*0.22, 0.0));
+  n += 0.5*snoise(q*2.2 - uTime*0.3 + n);
+  float veins = pow(1.0 - abs(n), 7.0);                     // 光の筋（流れる模様）
+  float mist  = smoothstep(-0.3, 0.9, snoise(q*0.8 + uTime*0.1))*0.5;
+  vec3 base = mix(uColorA, uColorB, clamp(vDisp*1.3 + 0.5, 0.0, 1.0));
+  vec3 irid = pal(fres*0.85 + vDisp*0.7 + uTime*0.025);
+  vec3 c = base*(0.04 + mist*0.12)
+         + mix(base, irid, 0.5)*fres*1.25
+         + mix(uColorB, vec3(1.0), 0.25)*veins*(0.28 + uHigh*0.7 + uCharge*0.8);
+  c *= 1.0 + uCollapse*0.35;
+  gl_FragColor = vec4(c, 1.0);
+}`;
+const coreGeo = new THREE.IcosahedronGeometry(1.25, 48);
+const coreMat = new THREE.ShaderMaterial({ uniforms:coreUniforms, vertexShader:coreVS, fragmentShader:coreFS, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false });
+const core = new THREE.Mesh(coreGeo, coreMat);
+scene.add(core);
+const wireUniforms = { ...coreUniforms, uWire:{value:1} };
+const wire = new THREE.Mesh(new THREE.IcosahedronGeometry(1.27, 10),
+  new THREE.ShaderMaterial({ uniforms:wireUniforms, vertexShader:coreVS, fragmentShader:coreFS, wireframe:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+scene.add(wire);
+
+/* ---------- heart (inner light), glow, light rays, halo rings ---------- */
+function canvasTex(size, draw){ const c = document.createElement('canvas'); c.width = c.height = size; draw(c.getContext('2d'), size); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+const glowTex = canvasTex(256, (g, n) => {
+  const gr = g.createRadialGradient(n/2, n/2, 0, n/2, n/2, n/2);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.18, 'rgba(255,255,255,.55)');
+  gr.addColorStop(.45, 'rgba(255,255,255,.12)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, n, n);
+});
+const rayTex = canvasTex(512, (g, n) => {
+  g.translate(n/2, n/2);
+  for (let i=0;i<36;i++){
+    const a = i/36*Math.PI*2 + (Math.random()-.5)*.08, len = n*(.28 + Math.random()*.22), w = .012 + Math.random()*.03;
+    const gr = g.createLinearGradient(0, 0, Math.cos(a)*len, Math.sin(a)*len);
+    gr.addColorStop(0, `rgba(255,255,255,${.25 + Math.random()*.35})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(0,0);
+    g.lineTo(Math.cos(a-w)*len, Math.sin(a-w)*len); g.lineTo(Math.cos(a+w)*len, Math.sin(a+w)*len); g.closePath(); g.fill();
+  }
+});
+const heartU = { uTime:coreUniforms.uTime, uColorA:coreUniforms.uColorA, uColorB:coreUniforms.uColorB, uPower:{value:.4} };
+const heart = new THREE.Mesh(new THREE.IcosahedronGeometry(0.4, 20), new THREE.ShaderMaterial({
+  uniforms:heartU, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false,
+  vertexShader: NOISE + /* glsl */`
+    uniform float uTime, uPower; varying vec3 vN; varying vec3 vV; varying float vF;
+    void main(){
+      float f = snoise(position*3.0 + uTime*1.2); vF = f;
+      vec3 p = position*(1.0 + f*0.12*(0.5+uPower));
+      vec4 mv = modelViewMatrix*vec4(p,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz);
+      gl_Position = projectionMatrix*mv;
+    }`,
+  fragmentShader: /* glsl */`
+    uniform vec3 uColorA, uColorB; uniform float uPower; varying vec3 vN; varying vec3 vV; varying float vF;
+    void main(){
+      float ndv = max(dot(vN, vV), 0.0);
+      vec3 c = mix(uColorB, vec3(1.0), pow(ndv, 3.0)*0.85) * (0.35 + uPower*1.4) * (0.85 + vF*0.25);
+      gl_FragColor = vec4(c * pow(ndv, 0.8), 1.0);
+    }`
+}));
+scene.add(heart);
+const glowSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:glowTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, opacity:.8 }));
+glowSprite.scale.setScalar(3.2); scene.add(glowSprite);
+const rays = new THREE.Sprite(new THREE.SpriteMaterial({ map:rayTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, opacity:.25 }));
+rays.scale.setScalar(8); scene.add(rays);
+
+const halo = new THREE.Group(); scene.add(halo);
+const haloRings = [];
+[[2.0, 1.25, 0.0, .11], [2.35, -0.95, 0.55, -.07], [1.75, 0.35, 1.35, .16]].forEach(([r, rx, rz, sp], i) => {
+  const g = new THREE.Group(); g.rotation.set(rx, 0, rz);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.006, 6, 256),
+    new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.5, blending:THREE.AdditiveBlending, depthWrite:false }));
+  g.add(ring);
+  // 刻印のような点列（回転が見える）
+  const n = 90 + i*30, pos = new Float32Array(n*3);
+  for (let k=0;k<n;k++){ const a = k/n*Math.PI*2, rr = r + (k%6===0 ? .07 : k%3===0 ? -.035 : 0); pos.set([Math.cos(a)*rr, Math.sin(a)*rr, 0], k*3); }
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const runes = new THREE.Points(pg, new THREE.PointsMaterial({ map:glowTex, size:.09, transparent:true, opacity:.8, blending:THREE.AdditiveBlending, depthWrite:false }));
+  g.add(runes);
+  halo.add(g); haloRings.push({ g, ring, runes, sp, rx });
+});
+
+/* ---------- particles (GPU) ---------- */
+const MAXP = 36000;
+const pGeo = new THREE.BufferGeometry();
+{
+  const dir = new Float32Array(MAXP*3), seed = new Float32Array(MAXP), rad = new Float32Array(MAXP);
+  for (let i=0;i<MAXP;i++){
+    const u=Math.random()*2-1, th=Math.random()*Math.PI*2, r=Math.sqrt(1-u*u);
+    dir[i*3]=r*Math.cos(th); dir[i*3+1]=u; dir[i*3+2]=r*Math.sin(th);
+    seed[i]=Math.random(); rad[i]=1.6 + Math.pow(Math.random(),2.2)*3.2;
+  }
+  pGeo.setAttribute('position', new THREE.BufferAttribute(dir,3));
+  pGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed,1));
+  pGeo.setAttribute('aRad', new THREE.BufferAttribute(rad,1));
+}
+const pUniforms = {
+  uTime:{value:0}, uExplode:{value:0}, uRebirth:{value:0}, uPulse:{value:0}, uSize:{value:1},
+  uColorA:{value:new THREE.Color()}, uColorB:{value:new THREE.Color()}, uPR:{value:renderer.getPixelRatio()},
+  uMouse:{value:new THREE.Vector3(0,0,99)}, uAttract:{value:0}, uRepel:{value:0}, uFlowT:{value:0}
+};
+const pMat = new THREE.ShaderMaterial({
+  uniforms:pUniforms, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+  vertexShader: NOISE + /* glsl */`
+  attribute float aSeed; attribute float aRad;
+  uniform float uTime, uExplode, uRebirth, uPulse, uSize, uPR, uAttract, uRepel, uFlowT; uniform vec3 uMouse;
+  varying float vSeed; varying float vFade;
+  void main(){
+    vec3 d = position;
+    float ang = uTime*(0.04 + aSeed*0.22);
+    float c = cos(ang), s = sin(ang);
+    d = vec3(c*d.x - s*d.z, d.y, s*d.x + c*d.z);
+    float r = aRad*(1.0 + uExplode*(0.4 + aSeed*aSeed*4.5));
+    float flow = 1.0 - fract(aSeed*7.0 + uFlowT);            // 中心へ流れ込む
+    r = mix(r, 1.35 + flow*aRad*1.2, uRebirth);
+    vec3 pos = d*r;
+    pos += vec3(snoise(d*2.0+uTime*0.3), snoise(d*2.0+11.0+uTime*0.3), snoise(d*2.0+23.0+uTime*0.3))*(0.08 + uPulse*0.35 + uExplode*0.3);
+    vec3 tm = uMouse - pos; float dm = length(tm) + 1e-4;
+    pos += tm/dm * (uAttract*min(dm, 3.5)*exp(-dm*0.22)*0.75 - uRepel*exp(-dm*dm*1.2)*0.9);   // 長押し：引き寄せ／ホバー：よける
+    vec4 mv = modelViewMatrix*vec4(pos,1.0);
+    gl_PointSize = uSize*(0.6 + aSeed*1.8)*uPR*(28.0 / -mv.z);
+    vSeed = aSeed; vFade = mix(1.0, smoothstep(0.0, 0.25, flow), uRebirth);
+    gl_Position = projectionMatrix*mv;
+  }`,
+  fragmentShader: /* glsl */`
+  uniform vec3 uColorA, uColorB; varying float vSeed; varying float vFade;
+  void main(){
+    vec2 q = gl_PointCoord - 0.5; float d = length(q);
+    if (d > 0.5) discard;
+    float a = smoothstep(0.5, 0.0, d);
+    gl_FragColor = vec4(mix(uColorA, uColorB, vSeed)*a*1.2, a*vFade*0.85);
+  }`
+});
+const particles = new THREE.Points(pGeo, pMat);
+scene.add(particles);
+
+/* ---------- stars + floor ---------- */
+{
+  const n = 1800, pos = new Float32Array(n*3);
+  for (let i=0;i<n;i++){ const v=new THREE.Vector3().randomDirection().multiplyScalar(35+Math.random()*50); pos.set([v.x,v.y,v.z], i*3); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color:0x8899ff, size:0.12, transparent:true, opacity:.55, fog:false })));
+}
+const floor = new THREE.PolarGridHelper(12, 24, 10, 96, 0x4cc9f0, 0x4cc9f0);
+floor.position.y = -2.8;
+floor.material.transparent = true; floor.material.opacity = 0.16;
+scene.add(floor);
+
+/* ---------- shockwave rings ---------- */
+const rings = [];
+const ringGeo = new THREE.RingGeometry(0.97, 1.0, 160); ringGeo.rotateX(-Math.PI/2);
+for (let i=0;i<8;i++){
+  const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0, blending:THREE.AdditiveBlending, side:THREE.DoubleSide, depthWrite:false }));
+  m.visible = false; m.userData.age = 99; scene.add(m); rings.push(m);
+}
+function spawnRing(strength){
+  const r = rings.find(x => x.userData.age > 1.4) || rings[0];
+  r.userData.age = 0; r.userData.str = strength; r.visible = true; r.position.y = 0;
+  r.rotation.set((Math.random()-.5)*.6*strength, 0, (Math.random()-.5)*.6*strength);
+  return r;
+}
+
+/* ---------- post processing ---------- */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const afterimage = new AfterimagePass(0.8); composer.addPass(afterimage);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.2, 0.6, 0.12); composer.addPass(bloom);
+const rgb = new ShaderPass(RGBShiftShader); rgb.uniforms.amount.value = 0.0008; composer.addPass(rgb);
+composer.addPass(new OutputPass());
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+});
+
+
+/* =========================================================
+   INTERACTION: strike / charge→collapse / circle→rebuild / keys
+   ========================================================= */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), pickSphere = new THREE.Sphere(new THREE.Vector3(), 1.3);
+const pickPlane = new THREE.Plane(), camDir = new THREE.Vector3(), tmpV = new THREE.Vector3();
+const P = { x:innerWidth/2, y:innerHeight/2, down:false, t0:0, charge:0, world:new THREE.Vector3(0,0,99), hover:0, lastAng:null, rebuild:0, burst:0, flash:0 };
+function pick(x, y){
+  ndc.set(x/innerWidth*2-1, -(y/innerHeight)*2+1); ray.setFromCamera(ndc, camera);
+  pickSphere.radius = 1.3*core.scale.x;
+  if (ray.ray.intersectSphere(pickSphere, tmpV)) { P.world.copy(tmpV); return true; }
+  camera.getWorldDirection(camDir); pickPlane.setFromNormalAndCoplanarPoint(camDir.negate(), new THREE.Vector3());
+  ray.ray.intersectPlane(pickPlane, P.world); return false;
+}
+pointerReady = true;
+const panOf = x => (x/innerWidth*2-1)*0.8;
+function strike(){
+  const onSphere = pick(P.x, P.y);
+  const idx = Math.max(0, Math.min(SCALE.length-1, Math.floor((1 - P.y/innerHeight)*SCALE.length)));
+  sImpact(SCALE[idx], panOf(P.x));
+  if (onSphere){ coreUniforms.uHit.value.copy(core.worldToLocal(tmpV.copy(P.world)).normalize()); }
+  else { coreUniforms.uHit.value.copy(core.worldToLocal(tmpV.copy(P.world)).normalize()); }
+  coreUniforms.uHitAmt.value = onSphere ? 1 : 0.5; coreUniforms.uHitAge.value = 0;
+  spawnRing(onSphere ? .8 : .45); F.beat = Math.max(F.beat, .7);
+}
+function release(c){
+  sDrop(c);
+  forceUntil = clock.elapsedTime + 2.5 + c*3.5;
+  phase = ''; setPhase('COLLAPSE');
+  V.collapse = 1; V.shake = .6; P.burst = 1; P.flash = .55*c;
+  spawnRing(1); setTimeout(() => spawnRing(1), 140); setTimeout(() => spawnRing(.8), 300);
+}
+function rebuilt(){
+  sRebuilt(); P.flash = .3; P.rebuild = 0;
+  for (let i=0;i<4;i++) setTimeout(() => spawnRing(.7), i*120);
+  phase = ''; setPhase(autoPhase ? 'BUILD' : 'BUILD');
+}
+canvas.addEventListener('pointerdown', e => {
+  ensureCtx(); if (A.ctx.state === 'suspended') A.ctx.resume();
+  P.down = true; P.t0 = clock.elapsedTime; P.x = e.clientX; P.y = e.clientY; P.charge = 0;
+  canvas.setPointerCapture?.(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  const dx = e.clientX - P.x, dy = e.clientY - P.y; P.x = e.clientX; P.y = e.clientY; P.hover = 1;
+  if (phase === 'REBIRTH' && !forceUntil){
+    const ang = Math.atan2(P.y - innerHeight/2, P.x - innerWidth/2), r = Math.hypot(P.x - innerWidth/2, P.y - innerHeight/2);
+    if (P.lastAng !== null && r > 40){
+      let da = ang - P.lastAng; if (da > Math.PI) da -= 2*Math.PI; if (da < -Math.PI) da += 2*Math.PI;
+      if (Math.abs(da) < .6) P.rebuild = Math.min(1, P.rebuild + Math.abs(da)/(2*Math.PI*2.5));   // 2.5周で完成
+      if (P.rebuild >= 1) rebuilt();
+    }
+    P.lastAng = ang;
+  }
+});
+function endPress(){
+  if (!P.down) return;
+  P.down = false;
+  const held = clock.elapsedTime - P.t0;
+  if (held < 0.25) strike();
+  else if (P.charge > 0.25){ riserStop(); release(P.charge); }
+  else riserStop();
+  P.charge = 0;
+}
+canvas.addEventListener('pointerup', endPress);
+canvas.addEventListener('pointercancel', () => { P.down = false; P.charge = 0; riserStop(); });
+
+const NOTE_KEYS = 'qwertyui', DRUM_KEYS = { z:'kick', x:'snare', c:'hat', v:'crash' };
+function playKey(k){
+  const ni = NOTE_KEYS.indexOf(k);
+  if (ni >= 0){
+    sNote(SCALE[ni], 1, (ni/7*2-1)*.6);
+    const r = spawnRing(.3 + ni*.04); r.position.y = -1 + ni*.3; F.beat = Math.max(F.beat, .25);
+    return true;
+  }
+  const d = DRUM_KEYS[k];
+  if (d === 'kick'){ sKick(); F.beat = 1; spawnRing(.6); }
+  else if (d === 'snare'){ sSnare(); F.beat = Math.max(F.beat, .6); coreUniforms.uHitAmt.value = .5; coreUniforms.uHitAge.value = 0; coreUniforms.uHit.value.randomDirection(); }
+  else if (d === 'hat'){ sHat(); }
+  else if (d === 'crash'){ sCrash(); P.flash = .15; spawnRing(.9); }
+  return !!d;
+}
+let hintTimer = null;
+function showHint(){ $('hint').classList.remove('faded'); clearTimeout(hintTimer); hintTimer = setTimeout(() => $('hint').classList.add('faded'), 12000); }
+
+/* =========================================================
+   RENDER LOOP
+   ========================================================= */
+let seeking = false;
+const V = { collapse:0, rebirth:0, damp:.86, rot:.04, size:.8, camA:0, shake:0 };
+const colA = new THREE.Color('#1b2a6b'), colB = new THREE.Color('#4cc9f0'), tmpA = new THREE.Color(), tmpB = new THREE.Color();
+const srcVal = name => name === 'none' ? 0 : F[name];
+const clock = new THREE.Clock();
+let fpsAcc = 0, fpsN = 0, uiAcc = 0;
+
+function frame(){
+  requestAnimationFrame(frame);
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  analyse(dt, t);
+  updatePhase(dt, t);
+  // charge (long press)
+  if (P.down){
+    const held = t - P.t0;
+    if (held > 0.25){ riserStart(); P.charge = Math.min(1, (held - 0.25)/1.75); pick(P.x, P.y); }
+  }
+  P.hover *= Math.exp(-dt*1.2); P.burst *= Math.exp(-dt*1.8); P.flash *= Math.exp(-dt*6);
+  coreUniforms.uHitAmt.value *= Math.exp(-dt*2.2); coreUniforms.uHitAge.value += dt;
+  coreUniforms.uCharge.value = smooth(coreUniforms.uCharge.value, P.down ? P.charge : 0, 12, dt);
+  if (beatFlag && phase !== 'SILENCE') spawnRing(phase === 'COLLAPSE' ? 1 : 0.5);
+
+  // phase params (lerp)
+  const PH = PHASES[phase];
+  V.collapse = smooth(V.collapse, PH.collapse, phase==='COLLAPSE'?6:1.6, dt);
+  V.rebirth  = smooth(V.rebirth,  PH.rebirth, 1.4, dt);
+  V.damp     = smooth(V.damp, PH.damp, 2, dt);
+  V.rot      = smooth(V.rot, PH.rot, 1.5, dt);
+  V.size     = smooth(V.size, PH.size, 2, dt);
+  const [ta, tb] = THEMES[settings.theme][phase];
+  colA.lerp(tmpA.set(ta), 1-Math.exp(-dt*2)); colB.lerp(tmpB.set(tb), 1-Math.exp(-dt*2));
+
+  // mapping
+  const deform = srcVal(settings.map.deform) * settings.deform;
+  const spread = srcVal(settings.map.spread);
+  const glow   = srcVal(settings.map.glow);
+  const hue    = srcVal(settings.map.hue);
+  const cA = tmpA.copy(colA).offsetHSL(hue*0.12, 0, 0), cB = tmpB.copy(colB).offsetHSL(hue*0.12, 0, 0);
+
+  coreUniforms.uTime.value = t; coreUniforms.uDeform.value = 0.08 + deform; coreUniforms.uHigh.value = F.high;
+  coreUniforms.uCollapse.value = V.collapse; coreUniforms.uColorA.value.copy(cA); coreUniforms.uColorB.value.copy(cB);
+  const sc = 1 + F.rms*0.12 + F.beat*0.06*(0.3+V.collapse) - V.rebirth*0.1*(1-P.rebuild);
+  core.scale.setScalar(sc); wire.scale.setScalar(sc*(1+V.collapse*0.25));
+  core.rotation.y += dt*V.rot*0.6; wire.rotation.y -= dt*V.rot*0.3; wire.rotation.x += dt*0.05;
+  // heart / glow / rays / halo
+  const ch = coreUniforms.uCharge.value;
+  heartU.uPower.value = 0.25 + F.low*0.6 + F.beat*0.9 + ch*1.6 + P.burst*1.5 - V.rebirth*0.15 + P.rebuild*0.8;
+  heart.scale.setScalar((1 + F.beat*0.22 + F.low*0.1) * (1 - ch*0.35) * (1 + P.burst*0.6));
+  heart.rotation.y -= dt*0.4;
+  glowSprite.material.color.copy(cB);
+  glowSprite.material.opacity = 0.35 + F.rms*0.4 + F.beat*0.3 + ch*0.5;
+  glowSprite.scale.setScalar(2.6 + F.rms*1.4 + F.beat*0.8 + ch*1.2 + P.burst*3);
+  rays.material.color.copy(cB).lerp(cA, .4);
+  rays.material.opacity = 0.12 + F.rms*0.25 + V.collapse*0.25 + ch*0.35 + P.rebuild*0.3;
+  rays.material.rotation += dt*(0.04 + V.collapse*0.25 + ch*0.6);
+  rays.scale.setScalar(7 + V.collapse*3 + P.burst*6);
+  const hs = (1 + V.collapse*0.55 + P.burst*0.8) * (1 - V.rebirth*0.25*(1-P.rebuild)) * (1 - ch*0.2);
+  halo.scale.setScalar(hs);
+  haloRings.forEach((h, i) => {
+    h.g.rotation.y += dt*h.sp*(1 + V.collapse*3 + ch*6);
+    h.g.rotation.x = h.rx + Math.sin(t*0.3 + i)*0.15*(1 + V.collapse*2);
+    h.runes.rotation.z += dt*h.sp*2*(1 + V.collapse*2);
+    h.ring.material.color.copy(i === 1 ? cA : cB); h.runes.material.color.copy(cB);
+    h.ring.material.opacity = 0.25 + F.mid*0.35 + V.collapse*0.3;
+    h.runes.material.opacity = 0.45 + F.high*0.5;
+  });
+
+  pUniforms.uTime.value = t;
+  pUniforms.uExplode.value = V.collapse*(0.5 + spread*0.9) + spread*0.22 + P.burst*1.6 - coreUniforms.uCharge.value*0.3;
+  if (P.hover > 0.01 || P.down) pick(P.x, P.y);
+  pUniforms.uMouse.value.copy(P.world);
+  pUniforms.uAttract.value = coreUniforms.uCharge.value*2.2;
+  pUniforms.uRepel.value = P.down ? 0 : P.hover*0.7;
+  pUniforms.uFlowT.value += dt*(0.12 + P.rebuild*0.9);
+  pUniforms.uRebirth.value = V.rebirth;
+  pUniforms.uPulse.value = F.high;
+  pUniforms.uSize.value = V.size;
+  pUniforms.uColorA.value.copy(cA); pUniforms.uColorB.value.copy(cB);
+  pGeo.setDrawRange(0, Math.floor(MAXP*settings.particles));
+
+  floor.material.color.copy(cB);
+  floor.material.opacity = 0.08 + F.low*0.18 + V.collapse*0.1;
+  floor.position.y = -2.8 - F.beat*0.15*V.collapse;
+
+  for (const r of rings){
+    const u = r.userData; if (u.age > 1.4){ r.visible=false; continue; }
+    u.age += dt; const k = u.age/1.4;
+    r.scale.setScalar(1.4 + k*(5 + 7*u.str));
+    r.material.opacity = (1-k)*(1-k)*0.9*u.str; r.material.color.copy(cB);
+  }
+
+  // camera
+  V.camA += dt*V.rot*0.5;
+  V.shake = Math.max(V.shake*Math.exp(-dt*8), beatFlag ? V.collapse*0.18 : 0, coreUniforms.uCharge.value*0.06);
+  const R = 7.2 - V.collapse*0.8 + V.rebirth*0.6;
+  camera.position.set(Math.sin(V.camA)*R + (Math.random()-.5)*V.shake, 1.1 + Math.sin(t*0.21)*0.6 + (Math.random()-.5)*V.shake, Math.cos(V.camA)*R);
+  camera.lookAt(0, 0, 0);
+
+  // post
+  bloom.strength = settings.bloom*(0.45 + glow*1.1 + coreUniforms.uCharge.value*1.2 + P.burst*0.8) * (phase==='SILENCE'?0.7:1);
+  $('flash').style.opacity = P.flash.toFixed(3);
+  // cursor charge ring / rebuild gauge
+  const cr = $('cursorRing'), cl = $('cursorLabel');
+  if (P.down && P.charge > 0){
+    const col = THEMES[settings.theme].COLLAPSE[0];
+    cr.style.left = P.x+'px'; cr.style.top = P.y+'px'; cr.style.opacity = 1;
+    cr.style.background = `conic-gradient(${col} ${P.charge*360}deg, rgba(255,255,255,.12) 0)`;
+    cl.style.left = P.x+'px'; cl.style.top = P.y+'px'; cl.style.opacity = 1;
+    cl.textContent = P.charge > .25 ? (P.charge >= 1 ? 'MAX — 離して崩壊' : '離すと崩壊') : 'チャージ中…';
+  } else { cr.style.opacity = 0; cl.style.opacity = 0; }
+  const showRebuild = phase === 'REBIRTH' && !forceUntil;
+  $('rebuild').classList.toggle('show', showRebuild);
+  if (showRebuild) $('rebuildBar').style.width = (P.rebuild*100).toFixed(0)+'%';
+  rgb.uniforms.amount.value = 0.0006 + V.collapse*(0.0015 + F.beat*0.012);
+  rgb.uniforms.angle.value = t*0.7;
+  afterimage.uniforms.damp.value = V.damp;
+
+  composer.render();
+
+  // HUD
+  fpsAcc += dt; fpsN++; uiAcc += dt;
+  if (beatFlag) $('beatDot').style.background = THEMES[settings.theme][phase][1];
+  else if (F.beat < 0.5) $('beatDot').style.background = '#222';
+  if (uiAcc > 0.066){
+    uiAcc = 0;
+    for (const [k,id] of [['low','Low'],['mid','Mid'],['high','High'],['rms','Rms']]){
+      $('m'+id).style.width = (F[k]*100).toFixed(0)+'%'; $('v'+id).textContent = F[k].toFixed(2);
+    }
+    if (!A.buffer) $('timeLabel').textContent = 'FREE PLAY';
+    else {
+      const ct = Math.min(curTime(), A.buffer.duration);
+      if (!seeking) $('seek').value = (ct/A.buffer.duration*1000).toFixed(0);
+      $('timeLabel').textContent = `${fmt(ct)} / ${fmt(A.buffer.duration)}`;
+    }
+  }
+  if (fpsAcc > 0.5){
+    $('fps').textContent = Math.round(fpsN/fpsAcc)+' fps'; fpsAcc = 0; fpsN = 0;
+    const b = bpmEstimate(); $('bpmLabel').textContent = b ? `≈${b} BPM（推定）` : '— BPM';
+  }
+}
+const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+setPhase('BUILD'); setPhase('SILENCE');
+frame();
+
+/* =========================================================
+   UI WIRING
+   ========================================================= */
+function toast(msg){ const el=$('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),1800); }
+function showErr(msg){ $('err').textContent = msg; }
+
+function startWith(buffer, name){
+  pause(); A.buffer = buffer; A.offset = 0; A.name = name;
+  $('trackName').textContent = name; $('start').classList.add('hidden');
+  peaks.low=peaks.mid=peaks.high=.3; peaks.rms=.1; rmsSlowPeak=.05; rmsSlow=0; rmsVSlow=0; beatTimes=[]; fluxHist=[]; phase=''; setPhase('SILENCE');
+  play(); showHint();
+}
+$('demoBtn').onclick = () => {
+  ensureCtx(); showErr(''); $('demoBtn').textContent = '生成中…';
+  setTimeout(() => {
+    try { startWith(generateDemo(A.ctx), 'DEMO — original synth track (128 BPM)'); }
+    catch(e){ showErr('デモ曲の生成に失敗しました：' + e.message); }
+    $('demoBtn').textContent = 'デモ曲で体験する';
+  }, 30);
+};
+$('fileBtn').onclick = () => $('fileIn').click();
+$('freeBtn').onclick = () => {
+  ensureCtx(); A.ctx.resume(); pause(); A.buffer = null; A.offset = 0;
+  $('trackName').textContent = 'FREE PLAY — 自分で鳴らして遊ぶ'; $('start').classList.add('hidden');
+  peaks.low=peaks.mid=peaks.high=.3; peaks.rms=.1; rmsSlowPeak=.05; rmsSlow=0; rmsVSlow=0; beatTimes=[]; fluxHist=[];
+  phase=''; setPhase('SILENCE'); showHint();
+};
+$('fileIn').onchange = e => { const f = e.target.files[0]; if (f) loadFile(f); e.target.value=''; };
+async function loadFile(f){
+  ensureCtx(); showErr('');
+  const okExt = /\.(wav|mp3|m4a|ogg|oga|flac|aac|webm)$/i.test(f.name);
+  if (!f.type.startsWith('audio/') && !okExt){ showErr('音声ファイルを選んでください（WAV推奨）。'); return; }
+  if (f.size > 100*1024*1024){ showErr('ファイルが大きすぎます（100MBまで）。'); return; }
+  $('fileBtn').textContent = '読み込み中…';
+  try {
+    const buf = await A.ctx.decodeAudioData(await f.arrayBuffer());
+    startWith(buf, f.name);
+  } catch(e){
+    showErr('この形式は読み込めませんでした。WAVに変換して試してください。');
+  } finally { $('fileBtn').textContent = '音源ファイルを選ぶ'; }
+}
+const drop = $('drop');
+['dragenter','dragover'].forEach(ev => addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(ev => addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+
+$('playBtn').onclick = () => A.playing ? pause() : play();
+$('newBtn').onclick = () => { pause(); $('start').classList.remove('hidden'); };
+$('seek').addEventListener('input', () => { seeking = true; if (A.buffer) $('timeLabel').textContent = `${fmt($('seek').value/1000*A.buffer.duration)} / ${fmt(A.buffer.duration)}`; });
+$('seek').addEventListener('change', () => { seeking = false; if (A.buffer) seek($('seek').value/1000*A.buffer.duration); });
+$('vol').oninput = e => { if (A.gain) A.gain.gain.value = +e.target.value; };
+
+$('collapseBtn').onclick = () => { const p=$('panel'); p.classList.toggle('collapsed'); $('collapseBtn').textContent = p.classList.contains('collapsed') ? '+' : '–'; };
+$('autoBtn').onclick = () => { autoPhase = true; $('autoBtn').classList.add('on'); $('manualBtn').classList.remove('on'); setPhase(phase); document.querySelectorAll('#phaseBtns button').forEach(x=>x.classList.remove('on')); };
+$('manualBtn').onclick = () => { autoPhase = false; $('manualBtn').classList.add('on'); $('autoBtn').classList.remove('on'); const p=phase; phase=''; setPhase(p); };
+document.querySelectorAll('#phaseBtns button').forEach(b => b.onclick = () => { if (autoPhase) $('manualBtn').onclick(); setPhase(b.dataset.p); });
+
+const sliders = [
+  ['sSens','oSens','sens', v=>v.toFixed(2)], ['sDeform','oDeform','deform', v=>v.toFixed(2)],
+  ['sPart','oPart','particles', v=>Math.round(v*100)+'%'], ['sBloom','oBloom','bloom', v=>v.toFixed(2)],
+];
+for (const [s,o,key,f] of sliders){ $(s).oninput = e => { settings[key] = +e.target.value; $(o).textContent = f(settings[key]); }; }
+$('theme').onchange = e => { settings.theme = e.target.value; const p=phase; phase=''; setPhase(p); };
+document.querySelectorAll('select[data-map]').forEach(sel => {
+  for (const [k,label] of Object.entries(SOURCES)) sel.add(new Option(label, k));
+  sel.onchange = () => settings.map[sel.dataset.map] = sel.value;
+});
+function syncUI(){
+  for (const [s,o,key,f] of sliders){ $(s).value = settings[key]; $(o).textContent = f(settings[key]); }
+  $('theme').value = settings.theme;
+  document.querySelectorAll('select[data-map]').forEach(sel => sel.value = settings.map[sel.dataset.map]);
+  const p=phase; phase=''; setPhase(p);
+}
+function validPreset(o){
+  return o && typeof o === 'object' && THEMES[o.theme] && o.map && ['deform','spread','glow','hue'].every(k => SOURCES[o.map[k]])
+    && ['sens','deform','particles','bloom'].every(k => typeof o[k] === 'number' && isFinite(o[k]));
+}
+function applyPreset(o){
+  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+  settings = { sens:clamp(o.sens,.5,2), deform:clamp(o.deform,0,2), particles:clamp(o.particles,.1,1), bloom:clamp(o.bloom,0,3), theme:o.theme, map:{...o.map} };
+  syncUI();
+}
+$('saveBtn').onclick = () => { try { localStorage.setItem('sonicCollapse.slot'+$('slot').value, JSON.stringify(settings)); toast(`スロット${$('slot').value}に保存しました（このブラウザ内）`); } catch(e){ toast('このブラウザでは保存できません。JSONコピーを使ってください'); } };
+$('loadBtn').onclick = () => {
+  try { const o = JSON.parse(localStorage.getItem('sonicCollapse.slot'+$('slot').value)); if (!validPreset(o)) throw 0; applyPreset(o); toast(`スロット${$('slot').value}を呼び出しました`); }
+  catch(e){ toast('このスロットには保存がありません'); }
+};
+$('copyBtn').onclick = async () => {
+  const txt = JSON.stringify(settings);
+  try { await navigator.clipboard.writeText(txt); toast('JSONをコピーしました'); }
+  catch(e){ $('jsonIn').value = txt; $('jsonIn').select(); toast('コピーできなかったので下の欄に表示しました'); }
+};
+$('applyBtn').onclick = () => {
+  try { const o = JSON.parse($('jsonIn').value); if (!validPreset(o)) throw 0; applyPreset(o); toast('プリセットを適用しました'); }
+  catch(e){ toast('JSONの形式が正しくありません'); }
+};
+syncUI();
+
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+  if (e.code === 'Space'){ e.preventDefault(); if (A.buffer) (A.playing ? pause() : play()); }
+  if (!e.repeat && !e.metaKey && !e.ctrlKey && playKey(e.key.toLowerCase())) return;
+  if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('hide-ui');
+  if (e.key === 'f' || e.key === 'F'){ (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen())?.catch?.(()=>{}); }
+  const idx = ['1','2','3','4'].indexOf(e.key);
+  if (idx >= 0){ if (autoPhase) $('manualBtn').onclick(); setPhase(['SILENCE','BUILD','COLLAPSE','REBIRTH'][idx]); }
+});
+</script>
+</body>
+</html>
